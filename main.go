@@ -14,6 +14,7 @@ const (
 	G_START_Y     = 40
 	G_CELL_WIDTH  = 30
 	G_CELL_HEIGHT = 30
+	FALL_SPEED    = 10
 )
 
 // EACH tetromino will be its color, 0 will be empty
@@ -55,7 +56,7 @@ func main() {
 			}
 		}
 
-		if g.count > 10 {
+		if g.count > FALL_SPEED {
 
 			if g.tetromino.y == G_TALL-4 {
 				g.gameNew()
@@ -100,8 +101,13 @@ func getInput(g *Game) {
 		moveTetromino(g, g.tetromino.x-1, g.tetromino.y)
 	}
 
-	if rl.IsKeyPressed(rl.KeyBackspace) {
-		rotateRight(&g.tetromino.piece)
+	if rl.IsKeyPressed(rl.KeySpace) {
+		space, error := getSpaceFromPosition(g, g.tetromino.x, g.tetromino.y, getTetrominoWidth(g.tetromino.piece))
+
+		if error != nil {
+			fmt.Printf("%s\n", error)
+		}
+		rotateRight(&g.tetromino.piece, space)
 	}
 
 }

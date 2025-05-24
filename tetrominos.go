@@ -163,7 +163,6 @@ func drawTetrominoOnGrid(x int, y int, t [4][4]int, g *Game) {
 			if x+j == 10 {
 				x--
 			}
-			fmt.Println(y+i, x+j, jt)
 			g.grid[y+i][x+j] = jt
 		}
 	}
@@ -171,24 +170,21 @@ func drawTetrominoOnGrid(x int, y int, t [4][4]int, g *Game) {
 
 // }
 
-func rotateRight(matrix *[4][4]int) {
+func rotateRight(matrix *[4][4]int, positionOnGrid [4][4]int) {
+	var rotated [4][4]int
+	// Copy = rotated matrix
 	for i := 0; i < 4; i++ {
-		for j := i + 1; j < 4; j++ {
-			matrix[i][j], matrix[j][i] = matrix[j][i], matrix[i][j]
+		for j := 0; j < 4; j++ {
+			rotated[j][3-i] = matrix[i][j]
 		}
 	}
 
-	for i := 0; i < 4; i++ {
-		for j := 0; j < 2; j++ {
-			matrix[i][j], matrix[i][4-1-j] = matrix[i][4-1-j], matrix[i][j]
-		}
-	}
 	// If we have a bottom line with 0s we cut it and push down the tetromino
 	empty_rows := 0
 	for i := 3; i >= 0; i-- {
 		inline_zeroes := 0
 		for j := 0; j < 4; j++ {
-			if matrix[i][j] == 0 {
+			if rotated[i][j] == 0 {
 				inline_zeroes++
 			}
 		}
@@ -198,18 +194,102 @@ func rotateRight(matrix *[4][4]int) {
 			break
 		}
 	}
+
 	if empty_rows > 0 {
 		for i := 3; i >= empty_rows; i-- {
 			for j := 0; j < 4; j++ {
-				matrix[i][j] = matrix[i-empty_rows][j]
+				rotated[i][j] = rotated[i-empty_rows][j]
 			}
 		}
-		// Clear top rows
 		for i := 0; i < empty_rows; i++ {
 			for j := 0; j < 4; j++ {
-				matrix[i][j] = 0
+				rotated[i][j] = 0
 			}
 		}
 	}
 
+	isOk := 1
+	tries := []int{0}
+	for isOk > 0 {
+		isOk = 0
+		for i := 0; i < 4; i++ {
+			for j := 0; j < 4; j++ {
+				// maybe out of bounds if rotate on right side
+				if positionOnGrid[i][j] != 0 && rotated[i][j] != 0 {
+					isOk = 1
+				}
+			}
+		}
+
+		if isOk != 0 {
+			rightIndex := shiftTetrominoRight(&rotated)
+			tries = append(tries, rightIndex)
+			isOk = 0
+			if tries[len(tries)-1] != 0 {
+				shiftTetrominoLeft(&rotated)
+				shiftTetrominoLeft(&rotated)
+				isOk = -1
+			}
+		}
+	}
+
+	if isOk == 0 {
+		// matrix = copy
+		for i := 0; i < 4; i++ {
+			for j := 0; j < 4; j++ {
+				matrix[i][j] = rotated[i][j]
+			}
+		}
+	}
+}
+
+func shiftTetrominoRight(tetromino *[4][4]int) int {
+	rightestValue := 0
+	for i := range tetromino {
+		for vIndex, v := range tetromino[i] {
+			if v != 0 && vIndex >= rightestValue {
+				rightestValue = vIndex
+			}
+		}
+	}
+	if rightestValue > 0 {
+		for i := 0; i < 4; i++ {
+			for j := 3; j > 0; j-- {
+				tetromino[i][j] = tetromino[i][j-1]
+			}
+			tetromino[i][0] = 0
+		}
+	}
+	return rightestValue
+}
+
+func shiftTetrominoLeft(tetromino *[4][4]int) int {
+	leftestValue := 3
+	for i := range tetromino {
+		for vIndex, v := range tetromino[i] {
+			if v != 0 && vIndex <= leftestValue {
+				leftestValue = vIndex
+			}
+		}
+	}
+
+	if leftestValue < 3 {
+		for i := 0; i < 4; i++ {
+			for j := 0; j < 3; j++ {
+				tetromino[i][j] = tetromino[i][j+1]
+			}
+			tetromino[i][3] = 0
+		}
+	}
+	return leftestValue
+}
+
+func copyTetromino(tetromino *[4][4]int) *[4][4]int {
+	var copy [4][4]int
+	for i := range tetromino {
+		for j := range tetromino[i] {
+			copy[i][j] = tetromino[i][j]
+		}
+	}
+	return &copy
 }
