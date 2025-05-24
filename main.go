@@ -6,15 +6,18 @@ import (
 )
 
 const (
-	SCREENWIDTH   = 600
-	SCREENHEIGHT  = 800
-	G_TALL        = 20
-	G_WIDE        = 10
-	G_START_X     = SCREENWIDTH/2 - SCREENWIDTH/4
-	G_START_Y     = 40
-	G_CELL_WIDTH  = 30
-	G_CELL_HEIGHT = 30
-	FALL_SPEED    = 10
+	SCREENWIDTH           = 630
+	SCREENHEIGHT          = 840
+	G_TALL                = 24
+	G_WIDE                = 10
+	G_START_X             = SCREENWIDTH/2 - SCREENWIDTH/4
+	G_START_Y             = 40
+	G_CELL_WIDTH          = 30
+	G_CELL_HEIGHT         = 30
+	FALL_SPEED            = 4
+	SCORE_ROW             = 10
+	TEXT_SCORE_POSITION_X = 15
+	TEXT_SCORE_POSITION_Y = 20
 )
 
 // EACH tetromino will be its color, 0 will be empty
@@ -24,15 +27,15 @@ type Tetromino struct {
 	y     int
 }
 
-// 0 dead 1 alive
-
 type Game struct {
 	isRunning   bool
 	copyTable   [G_TALL][G_WIDE]int
 	grid        [G_TALL][G_WIDE]int
 	count       int
-	onCollision int
+	onCollision bool
 	tetromino   Tetromino
+	score       int
+	combo       int
 }
 
 func main() {
@@ -42,23 +45,18 @@ func main() {
 	g := Game{isRunning: true, count: 0, tetromino: Tetromino{piece: tetrominos[0], x: 0, y: 0}}
 	rl.SetTargetFPS(60)
 
+	col := C_BACKGROUND
+	fmt.Println(col)
+	fmt.Println(uint32ToRLColors(col))
+
 	g.gameNew()
 	for !rl.WindowShouldClose() {
 		getInput(&g)
 		if g.isRunning == false {
 			break
 		}
-
-		if g.onCollision > 0 {
-			g.onCollision++
-			if g.onCollision > 5 {
-				g.gameNew()
-			}
-		}
-
 		if g.count > FALL_SPEED {
-
-			if g.tetromino.y == G_TALL-4 {
+			if g.onCollision || g.tetromino.y+4 == G_TALL {
 				g.gameNew()
 			} else {
 				moveTetromino(&g, g.tetromino.x, g.tetromino.y+1)
@@ -66,24 +64,46 @@ func main() {
 			g.count = 0
 		}
 		g.count++
-
 		rl.BeginDrawing()
-		rl.ClearBackground(rl.Red)
-
+		rl.ClearBackground(uint32ToRLColors(C_BACKGROUND))
 		drawGrid(&g)
-
+		g.drawHUD()
 		rl.EndDrawing()
 	}
 
 	defer rl.CloseWindow()
 }
 
+func (g *Game) drawHUD() {
+	rl.DrawRectangle(TEXT_SCORE_POSITION_X-10, G_START_Y, 140, 60, uint32ToRLColors(C_BACKGROUND))
+	rl.DrawRectangleLines(TEXT_SCORE_POSITION_X-10, G_START_Y, 140, 60, uint32ToRLColors(C_BORDER))
+	rl.DrawRectangleLines(G_START_X, G_START_Y, (G_CELL_WIDTH+1)*G_WIDE, (G_CELL_HEIGHT+1)*G_TALL, uint32ToRLColors(C_BORDER))
+	scoreStr := fmt.Sprintf("SCORE: %d\nCOMBO: %d\n", g.score, g.combo)
+	rl.DrawText(scoreStr, TEXT_SCORE_POSITION_X, G_START_Y+10, 20, uint32ToRLColors(C_TEXT))
+
+}
+
 func (g *Game) gameNew() {
-	g.onCollision = 0
+	g.onCollision = false
 	g.tetromino.piece = tetrominos[randomTetromino()]
 	g.tetromino.y = 0
 	g.tetromino.x = 4
 	g.copyTable = g.grid
+	checkForDeath(g)
+	deleteCompleteLines(g)
+
+}
+
+func checkForDeath(g *Game) {
+
+	for i := 0; i < 2; i++ {
+		for j := range g.copyTable[i] {
+			if g.copyTable[i][j] != 0 {
+				g.isRunning = false
+			}
+		}
+
+	}
 
 }
 
@@ -102,12 +122,19 @@ func getInput(g *Game) {
 	}
 
 	if rl.IsKeyPressed(rl.KeySpace) {
-		space, error := getSpaceFromPosition(g, g.tetromino.x, g.tetromino.y, getTetrominoWidth(g.tetromino.piece))
-
-		if error != nil {
-			fmt.Printf("%s\n", error)
+		// TODO: Maybe getspace should go out
+		// _, err := getSpaceFromPosition(g, g.tetromino.x, g.tetromino.y)
+		// if err != nil {
+		// 	fmt.Println("Rotation error:", err)
+		// } else {
+		fmt.Println("GoingToRotate")
+		success, dx, dy := rotateRight(&g.tetromino.piece, g, g.tetromino.x, g.tetromino.y)
+		if success {
+			g.tetromino.x += dx
+			g.tetromino.y += dy
 		}
-		rotateRight(&g.tetromino.piece, space)
+		g.count = 0
+
 	}
 
 }
@@ -146,60 +173,38 @@ func drawGrid(g *Game) {
 }
 
 // HELPERS, 1 IF IT HAS SOMETHING ON, 0 OTHERWISe
-func canMove(piece [4][4]int, space [4][4]int) int {
-	for i, row := range piece {
-		for j := range row {
-			if piece[i][j] != 0 && space[i][j] != 0 {
-				return 1
-			}
-		}
-	}
-	return 0
-}
-
-func getTetrominoWidth(tetromino [4][4]int) int {
-	minCol := 4
-	maxCol := -1
-
-	for i := 0; i < 4; i++ {
-		for j := 0; j < 4; j++ {
-			if tetromino[i][j] != 0 {
-				if j < minCol {
-					minCol = j
-				}
-				if j > maxCol {
-					maxCol = j
-				}
-			}
-		}
-	}
-
-	return maxCol - minCol + 1
-}
-
-func getSpaceFromPosition(g *Game, x int, y int, pieceWidth int) ([4][4]int, error) {
-	m := [4][4]int{}
-
-	if x < 0 || x+pieceWidth > len(g.grid[0]) {
-		return m, fmt.Errorf("Cant Move To New Space")
-	}
-
-	y_index := 0
-	for i := y; i < y+pieceWidth; i++ {
-		x_index := 0
-		for j := x; j < x+pieceWidth; j++ {
-			m[y_index][x_index] = g.grid[i][j]
-			x_index++
-		}
-		y_index++
-	}
-
-	return m, nil
-
-}
+// func canMove(piece [4][4]int, space [4][4]int) int {
+// 	for i, row := range piece {
+// 		for j := range row {
+// 			if piece[i][j] != 0 && space[i][j] != 0 {
+// 				return 1
+// 			}
+// 		}
+// 	}
+// 	return 0
+// }
+//
+// func getSpaceFromPosition(g *Game, x int, y int) ([4][4]int, error) {
+// 	var m [4][4]int
+//
+// 	for i := 0; i < 4; i++ {
+// 		for j := 0; j < 4; j++ {
+// 			gridY := y + i
+// 			gridX := x + j
+//
+// 			if gridY < 0 || gridY >= len(g.grid) || gridX < 0 || gridX >= len(g.grid[0]) {
+// 				m[i][j] = 1
+// 			} else {
+// 				m[i][j] = g.grid[gridY][gridX]
+// 			}
+// 		}
+// 	}
+//
+// 	return m, nil
+// }
 
 func moveTetromino(g *Game, newX int, newY int) {
-	g.onCollision = 0
+	g.onCollision = false
 	tetro := g.tetromino
 
 	var newCopy [G_TALL][G_WIDE]int
@@ -232,7 +237,7 @@ func moveTetromino(g *Game, newX int, newY int) {
 					fmt.Println("Horizontal Collision")
 					return
 				}
-				g.onCollision = 1
+				g.onCollision = true
 				fmt.Println("Vertical Collision")
 				return
 			}
@@ -243,5 +248,38 @@ func moveTetromino(g *Game, newX int, newY int) {
 	g.tetromino.x = newX
 	g.tetromino.y = newY
 	g.grid = newCopy
+	g.onCollision = false
+}
 
+func canPlace(rotated [4][4]int, grid [4][4]int, rowOffset, colOffset int) bool {
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 4; j++ {
+			newRow := i + rowOffset
+			newCol := j + colOffset
+			if rotated[i][j] != 0 {
+				if newRow < 0 || newRow >= 4 || newCol < 0 || newCol >= 4 {
+
+					return false
+				}
+				fmt.Println("STATE OF GRID IN canPlace")
+				fmt.Println(grid)
+				if grid[newRow][newCol] != 0 {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func applyOffset(matrix *[4][4]int, rowOffset, colOffset int) {
+	var moved [4][4]int
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 4; j++ {
+			if matrix[i][j] != 0 {
+				moved[i+rowOffset][j+colOffset] = matrix[i][j]
+			}
+		}
+	}
+	*matrix = moved
 }
