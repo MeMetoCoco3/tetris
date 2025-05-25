@@ -140,11 +140,11 @@ func getInput(g *Game) {
 		g.isRunning = false
 	}
 
-	if rl.IsKeyPressed(rl.KeyK) {
+	if rl.IsKeyPressed(rl.KeyK) || rl.IsKeyPressed(rl.KeyRight) {
 		moveTetromino(g, g.tetromino.x+1, g.tetromino.y)
 	}
 
-	if rl.IsKeyPressed(rl.KeyJ) {
+	if rl.IsKeyPressed(rl.KeyJ) || rl.IsKeyPressed(rl.KeyLeft) {
 		moveTetromino(g, g.tetromino.x-1, g.tetromino.y)
 	}
 
