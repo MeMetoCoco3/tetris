@@ -14,10 +14,11 @@ const (
 	G_START_Y             = 40
 	G_CELL_WIDTH          = 30
 	G_CELL_HEIGHT         = 30
-	FALL_SPEED            = 4
+	FALL_SPEED            = 8
 	SCORE_ROW             = 10
 	TEXT_SCORE_POSITION_X = 15
 	TEXT_SCORE_POSITION_Y = 20
+	COYOTE_TIME           = 2
 )
 
 // EACH tetromino will be its color, 0 will be empty
@@ -32,6 +33,7 @@ type Game struct {
 	copyTable   [G_TALL][G_WIDE]int
 	grid        [G_TALL][G_WIDE]int
 	count       int
+	coyoteTime  int
 	onCollision bool
 	tetromino   Tetromino
 	score       int
@@ -42,7 +44,7 @@ func main() {
 	fmt.Println("init")
 	rl.InitWindow(SCREENWIDTH, SCREENHEIGHT, "Tetris")
 
-	g := Game{isRunning: true, count: 0, tetromino: Tetromino{piece: tetrominos[0], x: 0, y: 0}}
+	g := Game{coyoteTime: 0, isRunning: true, count: 0, tetromino: Tetromino{piece: tetrominos[0], x: 0, y: 0}}
 	rl.SetTargetFPS(60)
 
 	col := C_BACKGROUND
@@ -51,13 +53,20 @@ func main() {
 
 	g.gameNew()
 	for !rl.WindowShouldClose() {
-		getInput(&g)
 		if g.isRunning == false {
 			break
 		}
+
+		getInput(&g)
+
 		if g.count > FALL_SPEED {
-			if g.onCollision || g.tetromino.y+4 == G_TALL {
-				g.gameNew()
+			canFall(&g, g.tetromino.x, g.tetromino.y)
+
+			if g.onCollision {
+				g.coyoteTime++
+				if g.coyoteTime > COYOTE_TIME {
+					g.gameNew()
+				}
 			} else {
 				moveTetromino(&g, g.tetromino.x, g.tetromino.y+1)
 			}
@@ -95,7 +104,6 @@ func (g *Game) gameNew() {
 }
 
 func checkForDeath(g *Game) {
-
 	for i := 0; i < 2; i++ {
 		for j := range g.copyTable[i] {
 			if g.copyTable[i][j] != 0 {
@@ -104,7 +112,26 @@ func checkForDeath(g *Game) {
 		}
 
 	}
+}
 
+func canFall(g *Game, x int, y int) {
+	tetromino := g.tetromino.piece
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 4; j++ {
+			if tetromino[i][j] == 0 {
+				continue
+			}
+			gridX := x + j
+			gridY := y + i
+
+			// Check if we're at the bottom or there's a block below
+			if gridY+1 >= G_TALL || g.copyTable[gridY+1][gridX] != 0 {
+				g.onCollision = true
+				return
+			}
+		}
+	}
+	g.onCollision = false
 }
 
 func getInput(g *Game) {
@@ -122,21 +149,13 @@ func getInput(g *Game) {
 	}
 
 	if rl.IsKeyPressed(rl.KeySpace) {
-		// TODO: Maybe getspace should go out
-		// _, err := getSpaceFromPosition(g, g.tetromino.x, g.tetromino.y)
-		// if err != nil {
-		// 	fmt.Println("Rotation error:", err)
-		// } else {
-		fmt.Println("GoingToRotate")
 		success, dx, dy := rotateRight(&g.tetromino.piece, g, g.tetromino.x, g.tetromino.y)
 		if success {
 			g.tetromino.x += dx
 			g.tetromino.y += dy
+			g.coyoteTime = 0
 		}
-		g.count = 0
-
 	}
-
 }
 
 func cleanGrid(g *Game) {
